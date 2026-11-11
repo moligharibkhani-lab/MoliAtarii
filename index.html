@@ -1,0 +1,1976 @@
+
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>MoliAtari | Space Combat</title>
+
+<style>
+*{box-sizing:border-box}
+body{margin:0;overflow:hidden;background:#020611;color:white;font-family:Arial,sans-serif}
+canvas{display:block}
+#hud{position:fixed;top:15px;left:15px;right:15px;display:flex;justify-content:space-between;pointer-events:none;z-index:5}
+.panel{background:rgba(5,15,35,.78);border:1px solid rgba(70,190,255,.35);border-radius:12px;padding:10px 15px;box-shadow:0 0 18px #0879b933}
+#healthBar{width:145px;height:8px;background:#333;margin-top:7px;border-radius:10px;overflow:hidden}
+#healthFill{width:100%;height:100%;background:#16d9c5;transition:width .2s}
+#menu,#gameOver,#pauseMenu{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse,#112b48dd,#01040df5)}
+#pauseMenu,#gameOver{display:none}
+.menuBox{width:min(440px,90%);padding:30px 25px;text-align:center;border:1px solid #30baff77;border-radius:22px;background:rgba(3,12,28,.92);box-shadow:0 0 45px #008cff33}
+h1{font-size:40px;letter-spacing:5px;color:#71dfff;text-shadow:0 0 20px #008dff;margin:0 0 8px}
+.subtitle{color:#9ebbd0;margin-bottom:25px}
+button{border:1px solid #48caff;color:white;background:linear-gradient(110deg,#075b9b,#062b55);border-radius:10px;padding:12px 20px;cursor:pointer;font-size:15px;margin:5px}
+button:hover{background:#0879b9}
+.setting{text-align:right;margin:18px 0;color:#b9d9ee}
+input[type=range]{width:100%;accent-color:#21c9ff}
+#hint{font-size:12px;color:#91b5ce;line-height:2}
+#controls{position:fixed;bottom:18px;left:18px;right:18px;display:none;justify-content:space-between;z-index:7;pointer-events:none}
+.pad{display:flex;gap:9px;pointer-events:auto}
+.pad button{width:53px;height:53px;padding:0;font-size:22px;border-radius:50%;background:#07365cbb;touch-action:none}
+#shoot{width:75px;height:75px;border-radius:50%;background:#9d1c34bb;border-color:#ff647f;font-size:13px}
+#pauseBtn{position:fixed;right:15px;top:85px;z-index:6;display:none}
+</style>
+</head>
+
+<body>
+
+<div id="hud">
+ <div class="panel">
+  <div>❤️ HEALTH</div>
+  <div id="healthBar"><div id="healthFill"></div></div>
+ </div>
+
+ <div class="panel">
+  <div>SCORE</div>
+  <strong id="score">0</strong>
+  <div style="font-size:11px;color:#9ac6dc">BEST: <span id="best">0</span></div>
+ </div>
+
+ <div class="panel">
+  <div>WAVE</div>
+  <strong id="wave">1</strong>
+ </div>
+</div>
+
+<button id="pauseBtn">Ⅱ PAUSE</button>
+
+<div id="menu">
+ <div class="menuBox">
+  <h1>MOLIATARI</h1>
+  <div class="subtitle">GALACTIC COMBAT SYSTEM</div>
+  <p style="color:#c5e8ff">به میدان نبرد کهکشان خوش آمدی</p>
+
+  <button id="startBtn" style="width:80%">START MISSION</button>
+  <button id="settingsBtn">SETTINGS</button>
+
+  <div id="hint">
+   حرکت: WASD یا کلیدهای جهت‌نما<br>
+   شلیک: SPACE
+  </div>
+
+  <div id="settings" style="display:none">
+   <div class="setting">
+    موسیقی پس‌زمینه
+    <input id="musicVolume" type="range" min="0" max="1" step=".05" value=".55">
+   </div>
+
+   <div class="setting">
+    صدای شلیک
+    <input id="shootVolume" type="range" min="0" max="1" step=".05" value=".35">
+   </div>
+
+   <div class="setting">
+    روشنایی محیط
+    <input id="brightness" type="range" min=".5" max="1.5" step=".05" value="1">
+   </div>
+
+   <button id="musicToggle">MUSIC: ON</button>
+  </div>
+ </div>
+</div>
+
+<div id="pauseMenu">
+ <div class="menuBox">
+  <h1>PAUSED</h1>
+  <p>MISSION SUSPENDED</p>
+  <button id="resumeBtn">RESUME</button>
+  <button id="restartPause">RESTART</button>
+  <button id="menuPause">MAIN MENU</button>
+ </div>
+</div>
+
+<div id="gameOver">
+ <div class="menuBox">
+  <h1 style="color:#ff627c">MISSION FAILED</h1>
+  <p>YOUR SHIP HAS BEEN DESTROYED</p>
+  <h2 id="finalScore">0</h2>
+  <button id="restartBtn">TRY AGAIN</button>
+  <button id="homeBtn">MAIN MENU</button>
+ </div>
+</div>
+
+<div id="controls">
+ <div class="pad">
+  <button data-key="ArrowLeft">◀</button>
+  <button data-key="ArrowRight">▶</button>
+  <button data-key="ArrowUp">▲</button>
+  <button data-key="ArrowDown">▼</button>
+ </div>
+ <button id="shoot">FIRE</button>
+</div>
+
+<script type="module">
+
+import * as THREE from '../node_modules/three/build/three.module.js';
+
+/* =========================
+   SCENE
+========================= */
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x020611);
+scene.fog = new THREE.FogExp2(0x020611, .009);
+
+const camera = new THREE.PerspectiveCamera(
+ 60,
+ window.innerWidth/window.innerHeight,
+ .1,
+ 1200
+);
+
+camera.position.set(0,4,13);
+camera.lookAt(0,0,-5);
+
+const renderer = new THREE.WebGLRenderer({
+ antialias:true,
+ alpha:false
+});
+
+renderer.setSize(window.innerWidth,window.innerHeight);
+
+/* بهینه‌سازی وضوح رندر */
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.35));
+
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1;
+
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0x9ccfff,0x080b20,2));
+
+const sun=new THREE.DirectionalLight(0xffffff,3);
+sun.position.set(-5,8,8);
+sun.castShadow=true;
+scene.add(sun);
+
+const blueLight=new THREE.PointLight(0x168bff,40,35);
+blueLight.position.set(0,4,3);
+scene.add(blueLight);
+
+
+/* =========================
+   GAME VARIABLES
+========================= */
+
+let gameState='menu';
+let score=0;
+let health=100;
+let wave=1;
+let elapsed=0;
+
+let spawnTimer=0;
+let fireTimer=0;
+let crashTimer=0;
+let crashTrailTimer=0;
+
+let best=Number(localStorage.getItem('moliBest')||0);
+
+const keys={};
+
+let shooting=false;
+let musicEnabled=true;
+
+let enemies=[];
+let playerBullets=[];
+let enemyBullets=[];
+let obstacles=[];
+let effects=[];
+let stars=[];
+let planets=[];
+
+document.getElementById('best').textContent=best;
+
+
+/* =========================
+   AUDIO SYSTEM
+   Original procedural space music
+========================= */
+
+let audioCtx=null;
+
+let musicMaster=null;
+let musicOscillators=[];
+let musicInterval=null;
+let musicNoteIndex=0;
+
+function initAudio(){
+
+ if(!audioCtx){
+  audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+ }
+
+ if(audioCtx.state==='suspended'){
+  audioCtx.resume();
+ }
+
+ if(!musicMaster){
+  musicMaster=audioCtx.createGain();
+  musicMaster.gain.value=0;
+  musicMaster.connect(audioCtx.destination);
+
+  /* لایه‌های موسیقی فضایی */
+
+  const pad1=audioCtx.createOscillator();
+  const padGain1=audioCtx.createGain();
+
+  pad1.type='sine';
+  pad1.frequency.value=110;
+  padGain1.gain.value=.075;
+
+  pad1.connect(padGain1);
+  padGain1.connect(musicMaster);
+  pad1.start();
+
+  const pad2=audioCtx.createOscillator();
+  const padGain2=audioCtx.createGain();
+
+  pad2.type='triangle';
+  pad2.frequency.value=164.81;
+  padGain2.gain.value=.035;
+
+  pad2.connect(padGain2);
+  padGain2.connect(musicMaster);
+  pad2.start();
+
+  musicOscillators=[pad1,pad2];
+ }
+}
+
+const musicNotes=[
+ 220,261.63,329.63,392,
+ 329.63,261.63,293.66,349.23,
+ 392,329.63,261.63,220
+];
+
+function playMusicNote(){
+
+ if(!audioCtx||!musicMaster)return;
+
+ const frequency=musicNotes[musicNoteIndex%musicNotes.length];
+ musicNoteIndex++;
+
+ const osc=audioCtx.createOscillator();
+ const gain=audioCtx.createGain();
+
+ osc.type='sine';
+ osc.frequency.value=frequency;
+
+ gain.gain.setValueAtTime(.0001,audioCtx.currentTime);
+ gain.gain.exponentialRampToValueAtTime(.045,audioCtx.currentTime+.12);
+ gain.gain.exponentialRampToValueAtTime(.0001,audioCtx.currentTime+.75);
+
+ osc.connect(gain);
+ gain.connect(musicMaster);
+
+ osc.start();
+ osc.stop(audioCtx.currentTime+.8);
+}
+
+function stopMusicSequence(){
+
+ if(musicInterval){
+  clearInterval(musicInterval);
+  musicInterval=null;
+ }
+}
+
+function updateMusic(){
+
+ if(!audioCtx||!musicMaster)return;
+
+ const volume=Number(document.getElementById('musicVolume').value);
+
+ const shouldPlay=musicEnabled&&gameState==='playing';
+
+ musicMaster.gain.setTargetAtTime(
+  shouldPlay?volume:0,
+  audioCtx.currentTime,
+  .15
+ );
+
+ if(shouldPlay){
+  if(!musicInterval){
+   playMusicNote();
+   musicInterval=setInterval(playMusicNote,650);
+  }
+ }else{
+  stopMusicSequence();
+ }
+}
+
+function playShot(){
+
+ if(!audioCtx)return;
+
+ const osc=audioCtx.createOscillator();
+ const gain=audioCtx.createGain();
+
+ osc.type='sawtooth';
+
+ osc.frequency.setValueAtTime(850,audioCtx.currentTime);
+ osc.frequency.exponentialRampToValueAtTime(180,audioCtx.currentTime+.12);
+
+ gain.gain.setValueAtTime(
+  Number(document.getElementById('shootVolume').value)*.12,
+  audioCtx.currentTime
+ );
+
+ gain.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.13);
+
+ osc.connect(gain);
+ gain.connect(audioCtx.destination);
+
+ osc.start();
+ osc.stop(audioCtx.currentTime+.14);
+}
+
+function playExplosion(){
+
+ if(!audioCtx)return;
+
+ const osc=audioCtx.createOscillator();
+ const gain=audioCtx.createGain();
+
+ osc.type='triangle';
+
+ osc.frequency.setValueAtTime(100,audioCtx.currentTime);
+ osc.frequency.exponentialRampToValueAtTime(25,audioCtx.currentTime+.4);
+
+ gain.gain.setValueAtTime(.15,audioCtx.currentTime);
+ gain.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.4);
+
+ osc.connect(gain);
+ gain.connect(audioCtx.destination);
+
+ osc.start();
+ osc.stop(audioCtx.currentTime+.42);
+}
+
+
+/* =========================
+   TEXTURES
+========================= */
+
+function canvasTexture(draw,w=1024,h=512){
+
+ const c=document.createElement('canvas');
+ c.width=w;
+ c.height=h;
+
+ const ctx=c.getContext('2d');
+
+ draw(ctx,w,h);
+
+ const tex=new THREE.CanvasTexture(c);
+ tex.colorSpace=THREE.SRGBColorSpace;
+
+ return tex;
+}
+
+const jupiterTexture=canvasTexture((ctx,w,h)=>{
+
+ const colors=[
+  '#b77c54','#e0b18a','#8b4f39','#d9b28d',
+  '#ad6d50','#f0d0a5','#84513e','#c48b68'
+ ];
+
+ for(let y=0;y<h;y++){
+  ctx.fillStyle=colors[Math.floor(y/32)%colors.length];
+  ctx.fillRect(0,y,w,1);
+ }
+
+ for(let i=0;i<1800;i++){
+  ctx.fillStyle=`rgba(255,255,255,${Math.random()*.12})`;
+  ctx.fillRect(Math.random()*w,Math.random()*h,Math.random()*35+5,1);
+ }
+
+ ctx.fillStyle='#a84e32';
+ ctx.beginPath();
+ ctx.ellipse(w*.68,h*.59,90,37,-.1,0,Math.PI*2);
+ ctx.fill();
+
+ ctx.strokeStyle='rgba(255,220,190,.4)';
+ ctx.lineWidth=5;
+ ctx.stroke();
+});
+
+const saturnTexture=canvasTexture((ctx,w,h)=>{
+
+ const colors=['#d7bb8d','#b88d5c','#e9d5ad','#a98055','#e1c49a'];
+
+ for(let y=0;y<h;y++){
+  ctx.fillStyle=colors[Math.floor(y/45)%colors.length];
+  ctx.fillRect(0,y,w,1);
+ }
+
+ for(let i=0;i<1000;i++){
+  ctx.fillStyle='rgba(255,255,255,.07)';
+  ctx.fillRect(Math.random()*w,Math.random()*h,Math.random()*30,2);
+ }
+});
+
+
+/* =========================
+   PLANETS
+========================= */
+
+function createPlanet(radius,texture,x,y,z,type){
+
+ const group=new THREE.Group();
+ group.position.set(x,y,z);
+
+ const sphere=new THREE.Mesh(
+  new THREE.SphereGeometry(radius,96,64),
+  new THREE.MeshStandardMaterial({
+   map:texture,
+   roughness:.9
+  })
+ );
+
+ sphere.castShadow=true;
+ sphere.receiveShadow=true;
+
+ group.add(sphere);
+
+ if(type==='saturn'){
+
+  const ring=new THREE.Mesh(
+   new THREE.RingGeometry(radius*1.35,radius*2.25,128),
+   new THREE.MeshStandardMaterial({
+    color:0xcdb38b,
+    roughness:.85,
+    side:THREE.DoubleSide,
+    transparent:true,
+    opacity:.88
+   })
+  );
+
+  ring.rotation.x=-.28;
+  group.add(ring);
+
+  const inner=new THREE.Mesh(
+   new THREE.RingGeometry(radius*1.05,radius*1.32,128),
+   new THREE.MeshStandardMaterial({
+    color:0x8e785f,
+    side:THREE.DoubleSide,
+    transparent:true,
+    opacity:.7
+   })
+  );
+
+  inner.rotation.x=-.28;
+  group.add(inner);
+ }
+
+ scene.add(group);
+ planets.push({group,sphere});
+
+ return group;
+}
+
+createPlanet(5,saturnTexture,-13,7,-45,'saturn');
+createPlanet(6.5,jupiterTexture,15,-5,-85,'jupiter');
+
+
+/* =========================
+   STARS
+========================= */
+
+function createStars(){
+
+ const positions=[];
+ const colors=[];
+
+ for(let i=0;i<2600;i++){
+
+  positions.push(
+   (Math.random()-.5)*180,
+   (Math.random()-.5)*110,
+   -Math.random()*230
+  );
+
+  const b=.5+Math.random()*.5;
+
+  colors.push(.65*b,.8*b,b);
+ }
+
+ const geo=new THREE.BufferGeometry();
+
+ geo.setAttribute(
+  'position',
+  new THREE.Float32BufferAttribute(positions,3)
+ );
+
+ geo.setAttribute(
+  'color',
+  new THREE.Float32BufferAttribute(colors,3)
+ );
+
+ const field=new THREE.Points(
+  geo,
+  new THREE.PointsMaterial({
+   size:.2,
+   vertexColors:true,
+   transparent:true,
+   opacity:.9,
+   sizeAttenuation:true
+  })
+ );
+
+ scene.add(field);
+ stars.push(field);
+}
+
+createStars();
+
+
+/* =========================
+   NEBULA
+========================= */
+
+function createNebula(){
+
+ const group=new THREE.Group();
+
+ for(let i=0;i<32;i++){
+
+  const sprite=new THREE.Sprite(
+   new THREE.SpriteMaterial({
+    color:[0x123a76,0x29165e,0x164a63,0x40205d][i%4],
+    transparent:true,
+    opacity:.045+Math.random()*.035,
+    blending:THREE.AdditiveBlending
+   })
+  );
+
+  sprite.position.set(
+   (Math.random()-.5)*100,
+   (Math.random()-.5)*60,
+   -60-Math.random()*130
+  );
+
+  sprite.scale.set(
+   15+Math.random()*30,
+   10+Math.random()*20,
+   1
+  );
+
+  group.add(sprite);
+ }
+
+ scene.add(group);
+}
+
+createNebula();
+
+
+/* =========================
+   MATERIAL HELPERS
+========================= */
+
+function makeMaterial(color,metalness=.7,roughness=.3){
+
+ return new THREE.MeshStandardMaterial({
+  color,
+  metalness,
+  roughness
+ });
+}
+
+
+/* =========================
+   PLAYER FIGHTER
+========================= */
+
+function createPlayer(){
+
+ const g=new THREE.Group();
+
+ const hull=makeMaterial(0xaebdca,.88,.24);
+ const edge=makeMaterial(0x52697d,.86,.28);
+ const dark=makeMaterial(0x142638,.82,.24);
+
+ const glass=new THREE.MeshPhysicalMaterial({
+  color:0x123e62,
+  metalness:.62,
+  roughness:.1,
+  clearcoat:1,
+  clearcoatRoughness:.04
+ });
+
+ const glowMat=new THREE.MeshBasicMaterial({
+  color:0x39cfff
+ });
+
+ function add(geo,mat,x,y,z,rx=0,ry=0,rz=0){
+
+  const m=new THREE.Mesh(geo,mat);
+
+  m.position.set(x,y,z);
+  m.rotation.set(rx,ry,rz);
+
+  m.castShadow=true;
+  m.receiveShadow=true;
+
+  g.add(m);
+
+  return m;
+ }
+
+ const profile=[
+  new THREE.Vector2(.22,-2.55),
+  new THREE.Vector2(.34,-2.15),
+  new THREE.Vector2(.43,-1.25),
+  new THREE.Vector2(.46,-.35),
+  new THREE.Vector2(.39,.75),
+  new THREE.Vector2(.27,1.65),
+  new THREE.Vector2(.12,2.25),
+  new THREE.Vector2(.015,2.55)
+ ];
+
+ const fuselage=new THREE.Mesh(
+  new THREE.LatheGeometry(profile,48),
+  hull
+ );
+
+ fuselage.rotation.x=Math.PI/2;
+ fuselage.castShadow=true;
+ fuselage.receiveShadow=true;
+
+ g.add(fuselage);
+
+ function wing(side){
+
+  const s=new THREE.Shape();
+
+  s.moveTo(side*.22,-.65);
+  s.quadraticCurveTo(side*.72,-.78,side*2.85,-1.95);
+  s.quadraticCurveTo(side*3.12,-2.08,side*3.02,-1.72);
+  s.quadraticCurveTo(side*2.65,-.35,side*2.25,.82);
+  s.quadraticCurveTo(side*1.45,.56,side*.48,.28);
+  s.quadraticCurveTo(side*.25,.12,side*.22,-.65);
+
+  const geo=new THREE.ExtrudeGeometry(s,{
+   depth:.13,
+   bevelEnabled:true,
+   bevelSegments:5,
+   steps:1,
+   bevelSize:.075,
+   bevelThickness:.055,
+   curveSegments:16
+  });
+
+  geo.translate(0,0,-.065);
+  geo.rotateX(Math.PI/2);
+
+  const m=new THREE.Mesh(geo,edge);
+
+  m.castShadow=true;
+  m.receiveShadow=true;
+
+  g.add(m);
+
+  const stripe=new THREE.Mesh(
+   new THREE.BoxGeometry(.055,.025,1.45),
+   glowMat
+  );
+
+  stripe.position.set(side*1.55,.105,-.48);
+  stripe.rotation.y=side*.34;
+
+  g.add(stripe);
+
+  const tip=add(
+   new THREE.SphereGeometry(.085,18,12),
+   glowMat,
+   side*2.88,.035,-1.78
+  );
+
+  tip.scale.set(1,.65,1.5);
+ }
+
+ wing(-1);
+ wing(1);
+
+ const canopy=add(
+  new THREE.SphereGeometry(1,40,28),
+  glass,
+  0,.36,-.67
+ );
+
+ canopy.scale.set(.32,.23,.83);
+
+ const canopyRim=add(
+  new THREE.TorusGeometry(.31,.035,10,40),
+  dark,
+  0,.36,-.67,
+  Math.PI/2,0,0
+ );
+
+ canopyRim.scale.set(1,1,2.45);
+
+ for(const side of [-1,1]){
+
+  const nacelle=add(
+   new THREE.CylinderGeometry(.22,.29,1.05,32,1,false),
+   dark,
+   side*.39,-.02,1.82,
+   Math.PI/2
+  );
+
+  const rim=add(
+   new THREE.TorusGeometry(.235,.045,10,32),
+   edge,
+   side*.39,-.02,2.35
+  );
+
+  const core=add(
+   new THREE.CircleGeometry(.17,32),
+   glowMat,
+   side*.39,-.02,2.37
+  );
+
+  const flame=add(
+   new THREE.ConeGeometry(.16,.92,24),
+   new THREE.MeshBasicMaterial({
+    color:0x168cff,
+    transparent:true,
+    opacity:.72
+   }),
+   side*.39,-.02,2.92,
+   Math.PI/2
+  );
+
+  flame.userData.engineFlame=true;
+
+  add(
+   new THREE.SphereGeometry(.13,20,14),
+   glowMat,
+   side*.39,-.02,2.4
+  ).scale.z=.55;
+
+  const finShape=new THREE.Shape();
+
+  finShape.moveTo(0,0);
+  finShape.quadraticCurveTo(side*.22,.2,side*.28,.82);
+  finShape.quadraticCurveTo(side*.12,.92,0,.7);
+  finShape.closePath();
+
+  const finGeo=new THREE.ExtrudeGeometry(finShape,{
+   depth:.09,
+   bevelEnabled:true,
+   bevelSegments:4,
+   bevelSize:.035,
+   bevelThickness:.025
+  });
+
+  finGeo.rotateX(Math.PI/2);
+
+  const fin=new THREE.Mesh(finGeo,edge);
+
+  fin.position.set(side*.28,.12,1.2);
+  fin.rotation.z=-side*.16;
+  fin.castShadow=true;
+
+  g.add(fin);
+ }
+
+ for(const side of [-1,1]){
+
+  const seam=add(
+   new THREE.BoxGeometry(.025,.018,.82),
+   dark,
+   side*.52,.19,-.12
+  );
+
+  seam.rotation.y=side*.28;
+
+  add(
+   new THREE.SphereGeometry(.055,12,10),
+   new THREE.MeshBasicMaterial({color:0xff4c62}),
+   side*2.92,.05,-1.75
+  );
+ }
+
+ g.scale.setScalar(.88);
+
+ return g;
+}
+
+const player=createPlayer();
+
+player.position.set(0,0,4);
+scene.add(player);
+
+
+/* =========================
+   ENEMY FIGHTERS
+========================= */
+
+function createEnemy(type=0){
+
+ const g=new THREE.Group();
+
+ const palettes=[
+  [0xa63850,0x351927,0xff4568],
+  [0x587fa7,0x172b43,0x4ac7ff],
+  [0xb28a45,0x45321b,0xffc65b],
+  [0x7659a7,0x2b1d4d,0xc39aff]
+ ];
+
+ const [bodyColor,armorColor,glowColor]=palettes[type%4];
+
+ const bodyMat=makeMaterial(bodyColor,.84,.27);
+ const armorMat=makeMaterial(armorColor,.86,.25);
+
+ const glassMat=new THREE.MeshPhysicalMaterial({
+  color:0x172e50,
+  metalness:.62,
+  roughness:.11,
+  clearcoat:1
+ });
+
+ const glowMat=new THREE.MeshBasicMaterial({
+  color:glowColor
+ });
+
+ function add(geo,mat,x,y,z,rx=0,ry=0,rz=0){
+
+  const m=new THREE.Mesh(geo,mat);
+
+  m.position.set(x,y,z);
+  m.rotation.set(rx,ry,rz);
+
+  m.castShadow=true;
+  m.receiveShadow=true;
+
+  g.add(m);
+
+  return m;
+ }
+
+ const profile=[
+  new THREE.Vector2(.18,-1.9),
+  new THREE.Vector2(.3,-1.45),
+  new THREE.Vector2(.38,-.55),
+  new THREE.Vector2(.34,.45),
+  new THREE.Vector2(.2,1.15),
+  new THREE.Vector2(.015,1.55)
+ ];
+
+ const fuselage=new THREE.Mesh(
+  new THREE.LatheGeometry(profile,40),
+  bodyMat
+ );
+
+ fuselage.rotation.x=Math.PI/2;
+ fuselage.castShadow=true;
+
+ g.add(fuselage);
+
+ const canopy=add(
+  new THREE.SphereGeometry(1,28,20),
+  glassMat,
+  0,.29,-.34
+ );
+
+ canopy.scale.set(.3,.2,.58);
+
+ function sweptWing(side,span=2.1,sweep=.8,thickness=.12){
+
+  const s=new THREE.Shape();
+
+  s.moveTo(side*.18,-.55);
+  s.quadraticCurveTo(side*.65,-.75,side*span,-sweep);
+  s.quadraticCurveTo(side*(span+.18),-sweep-.12,side*(span-.05),-sweep+.28);
+  s.quadraticCurveTo(side*(span-.42),.15,side*.72,.58);
+  s.quadraticCurveTo(side*.28,.22,side*.18,-.55);
+
+  const geo=new THREE.ExtrudeGeometry(s,{
+   depth:thickness,
+   bevelEnabled:true,
+   bevelSegments:4,
+   bevelSize:.055,
+   bevelThickness:.04,
+   curveSegments:14
+  });
+
+  geo.rotateX(Math.PI/2);
+
+  const wing=new THREE.Mesh(geo,bodyMat);
+
+  wing.castShadow=true;
+  g.add(wing);
+
+  add(
+   new THREE.BoxGeometry(.045,.025,.95),
+   glowMat,
+   side*(span*.58),.1,-sweep*.55,
+   0,0,side*.12
+  );
+ }
+
+ if(type===0){
+
+  sweptWing(-1,2.25,.95,.14);
+  sweptWing(1,2.25,.95,.14);
+
+ }else if(type===1){
+
+  sweptWing(-1,1.65,.35,.16);
+  sweptWing(1,1.65,.35,.16);
+
+  for(const s of [-1,1]){
+
+   add(
+    new THREE.SphereGeometry(.22,20,14),
+    armorMat,
+    s*1.25,.02,.45
+   );
+  }
+
+ }else if(type===2){
+
+  sweptWing(-1,2.45,1.35,.17);
+  sweptWing(1,2.45,1.35,.17);
+
+  const dorsal=add(
+   new THREE.SphereGeometry(.34,22,14),
+   armorMat,
+   0,.22,.25
+  );
+
+  dorsal.scale.set(.7,.45,1.2);
+
+ }else{
+
+  sweptWing(-1,2.05,.15,.12);
+  sweptWing(1,2.05,.15,.12);
+
+  for(const s of [-1,1]){
+
+   const pod=add(
+    new THREE.SphereGeometry(.27,22,14),
+    armorMat,
+    s*1.55,.02,.42
+   );
+
+   pod.scale.set(1,.8,1.8);
+  }
+ }
+
+ for(const s of [-1,1]){
+
+  add(
+   new THREE.CylinderGeometry(.17,.23,.5,24),
+   armorMat,
+   s*.34,0,1.22,
+   Math.PI/2
+  );
+
+  add(
+   new THREE.TorusGeometry(.17,.035,8,24),
+   bodyMat,
+   s*.34,0,1.49
+  );
+
+  add(
+   new THREE.SphereGeometry(.12,16,12),
+   glowMat,
+   s*.34,0,1.5
+  ).scale.z=.55;
+ }
+
+ g.rotation.y=Math.PI;
+
+ return g;
+}
+
+
+/* =========================
+   OPTIMIZED BULLETS
+========================= */
+
+/* هندسه و متریال گلوله‌ها فقط یک‌بار ساخته می‌شوند */
+
+const bulletGeometry=new THREE.CylinderGeometry(.045,.045,1.25,8);
+
+const playerBulletMaterial=new THREE.MeshBasicMaterial({
+ color:0x28dfff,
+ transparent:true,
+ opacity:.95
+});
+
+const enemyBulletMaterial=new THREE.MeshBasicMaterial({
+ color:0xff3155,
+ transparent:true,
+ opacity:.95
+});
+
+function createBullet(x,y,z,enemy=false){
+
+ const g=new THREE.Group();
+
+ const beam=new THREE.Mesh(
+  bulletGeometry,
+  enemy?enemyBulletMaterial:playerBulletMaterial
+ );
+
+ beam.rotation.x=Math.PI/2;
+ g.add(beam);
+
+ g.position.set(x,y,z);
+
+ scene.add(g);
+
+ (enemy?enemyBullets:playerBullets).push({
+  mesh:g,
+  speed:enemy?18:48
+ });
+}
+
+
+/* =========================
+   OPTIMIZED EXPLOSIONS
+========================= */
+
+const explosionGeometry=new THREE.SphereGeometry(1,6,6);
+
+const explosionMaterials=[
+ new THREE.MeshBasicMaterial({color:0xffb33f}),
+ new THREE.MeshBasicMaterial({color:0xff5335}),
+ new THREE.MeshBasicMaterial({color:0x55dfff}),
+ new THREE.MeshBasicMaterial({color:0xffffff})
+];
+
+function explosion(position,big=false){
+
+ const group=new THREE.Group();
+ group.position.copy(position);
+
+ const count=big?65:28;
+
+ for(let i=0;i<count;i++){
+
+  const mesh=new THREE.Mesh(
+   explosionGeometry,
+   explosionMaterials[Math.floor(Math.random()*4)]
+  );
+
+  const size=Math.random()*.07+.025;
+
+  mesh.scale.setScalar(size);
+
+  mesh.userData.velocity=new THREE.Vector3(
+   (Math.random()-.5)*8,
+   (Math.random()-.5)*8,
+   (Math.random()-.5)*8
+  );
+
+  group.add(mesh);
+ }
+
+ scene.add(group);
+
+ effects.push({
+  group,
+  life:1.1
+ });
+
+ playExplosion();
+}
+
+
+/* =========================
+   CRASH TRAIL
+========================= */
+
+function createCrashTrail(){
+
+ const group=new THREE.Group();
+
+ group.position.copy(player.position);
+ group.position.z+=1.05;
+
+ for(let i=0;i<9;i++){
+
+  const isFlame=i<4;
+
+  const material=new THREE.MeshBasicMaterial({
+   color:isFlame?
+    [0xffd15a,0xff6a2b,0xff3b20,0xffa12b][i%4]:
+    [0x252a32,0x424850,0x68717b][i%3],
+
+   transparent:true,
+   opacity:isFlame?.9:.48,
+   depthWrite:false
+  });
+
+  const particle=new THREE.Mesh(
+   new THREE.SphereGeometry(
+    isFlame?.12+Math.random()*.13:.16+Math.random()*.2,
+    12,10
+   ),
+   material
+  );
+
+  particle.position.set(
+   (Math.random()-.5)*.85,
+   (Math.random()-.5)*.65,
+   Math.random()*.55
+  );
+
+  particle.scale.set(
+   isFlame?.8:1.25,
+   isFlame?1.1:1.35,
+   isFlame?1.5:1.2
+  );
+
+  particle.userData.velocity=new THREE.Vector3(
+   (Math.random()-.5)*1.8,
+   (Math.random()-.5)*1.3,
+   1.8+Math.random()*2.8
+  );
+
+  group.add(particle);
+ }
+
+ /* نور اضافی حذف شده؛ خود افکت آتش و دود باقی است */
+
+ scene.add(group);
+
+ effects.push({
+  group,
+  life:.85
+ });
+}
+
+
+/* =========================
+   ENEMY SPAWNING
+========================= */
+
+function spawnEnemy(){
+
+ const type=Math.floor(Math.random()*4);
+ const mesh=createEnemy(type);
+
+ const x=(Math.random()-.5)*12;
+ const y=(Math.random()-.5)*4;
+
+ mesh.position.set(x,y,-65);
+
+ scene.add(mesh);
+
+ enemies.push({
+  mesh,
+  type,
+  health:type===0?3:2,
+  speed:10+Math.random()*3,
+  phase:Math.random()*10,
+  fire:2+Math.random()*3,
+  baseX:x
+ });
+}
+
+
+/* =========================
+   ASTEROIDS
+========================= */
+
+function spawnAsteroid(){
+
+ const radius=.4+Math.random()*.9;
+
+ const mesh=new THREE.Mesh(
+  new THREE.IcosahedronGeometry(radius,1),
+  new THREE.MeshStandardMaterial({
+   color:0x6e727b,
+   roughness:1,
+   metalness:.1
+  })
+ );
+
+ mesh.position.set(
+  (Math.random()-.5)*13,
+  (Math.random()-.5)*5,
+  -65
+ );
+
+ mesh.rotation.set(
+  Math.random()*3,
+  Math.random()*3,
+  Math.random()*3
+ );
+
+ mesh.castShadow=true;
+
+ scene.add(mesh);
+
+ obstacles.push({
+  mesh,
+  speed:12+Math.random()*4,
+  spin:(Math.random()-.5)*2,
+  radius
+ });
+}
+
+
+/* =========================
+   HUD
+========================= */
+
+function updateHUD(){
+
+ document.getElementById('score').textContent=score;
+ document.getElementById('healthFill').style.width=health+'%';
+ document.getElementById('wave').textContent=wave;
+}
+
+
+/* =========================
+   DAMAGE AND CRASH
+========================= */
+
+function damage(amount){
+
+ if(gameState!=='playing')return;
+
+ health=Math.max(0,health-amount);
+
+ updateHUD();
+
+ if(health<=0)crash();
+}
+
+function crash(){
+
+ if(gameState!=='playing')return;
+
+ gameState='crashing';
+ crashTimer=0;
+
+ document.getElementById('pauseBtn').style.display='none';
+}
+
+function finishCrash(){
+
+ explosion(player.position.clone(),true);
+
+ gameState='over';
+
+ document.getElementById('finalScore').textContent='SCORE: '+score;
+ document.getElementById('gameOver').style.display='flex';
+
+ if(score>best){
+  best=score;
+  localStorage.setItem('moliBest',best);
+ }
+
+ document.getElementById('best').textContent=best;
+
+ updateMusic();
+}
+
+
+/* =========================
+   COLLISION
+========================= */
+
+function collision(a,b,r){
+
+ return a.distanceTo(b)<r;
+}
+
+function removeEnemy(index){
+
+ const e=enemies[index];
+
+ explosion(e.mesh.position);
+
+ scene.remove(e.mesh);
+ enemies.splice(index,1);
+
+ score+=100;
+
+ updateHUD();
+}
+
+
+/* =========================
+   PLAYER SHOOTING
+========================= */
+
+function shoot(){
+
+ if(gameState!=='playing'||fireTimer>0)return;
+
+ fireTimer=.17;
+
+ createBullet(
+  player.position.x-.35,
+  player.position.y,
+  player.position.z-2
+ );
+
+ createBullet(
+  player.position.x+.35,
+  player.position.y,
+  player.position.z-2
+ );
+
+ playShot();
+}
+
+
+/* =========================
+   KEYBOARD CONTROLS
+========================= */
+
+window.addEventListener('keydown',e=>{
+
+ keys[e.code]=true;
+
+ if([
+  'Space',
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight'
+ ].includes(e.code)){
+  e.preventDefault();
+ }
+
+ if(e.code==='Space')shoot();
+
+ if(e.code==='Escape'){
+
+  if(gameState==='playing')pauseGame();
+  else if(gameState==='paused')resumeGame();
+ }
+});
+
+window.addEventListener('keyup',e=>{
+ keys[e.code]=false;
+});
+
+
+/* =========================
+   TOUCH CONTROLS
+========================= */
+
+document.querySelectorAll('[data-key]').forEach(btn=>{
+
+ const k=btn.dataset.key;
+
+ btn.addEventListener('pointerdown',e=>{
+  e.preventDefault();
+  keys[k]=true;
+ });
+
+ ['pointerup','pointerleave','pointercancel'].forEach(ev=>
+  btn.addEventListener(ev,()=>keys[k]=false)
+ );
+});
+
+const shootBtn=document.getElementById('shoot');
+
+shootBtn.addEventListener('pointerdown',e=>{
+
+ e.preventDefault();
+
+ shooting=true;
+ shoot();
+});
+
+['pointerup','pointerleave','pointercancel'].forEach(ev=>
+ shootBtn.addEventListener(ev,()=>shooting=false)
+);
+
+
+/* =========================
+   START GAME
+========================= */
+
+function startGame(){
+
+ initAudio();
+
+ score=0;
+ health=100;
+ wave=1;
+ elapsed=0;
+
+ spawnTimer=1;
+ fireTimer=0;
+ crashTimer=0;
+ crashTrailTimer=0;
+
+ for(const list of [
+  enemies,
+  playerBullets,
+  enemyBullets,
+  obstacles
+ ]){
+
+  for(const item of list){
+   scene.remove(item.mesh);
+  }
+
+  list.length=0;
+ }
+
+ for(const e of effects){
+  scene.remove(e.group);
+ }
+
+ effects.length=0;
+
+ player.position.set(0,0,4);
+ player.rotation.set(0,0,0);
+ player.visible=true;
+ player.userData.crashing=false;
+
+ updateHUD();
+
+ document.getElementById('menu').style.display='none';
+ document.getElementById('gameOver').style.display='none';
+ document.getElementById('pauseMenu').style.display='none';
+
+ document.getElementById('pauseBtn').style.display='block';
+ document.getElementById('controls').style.display='flex';
+
+ gameState='playing';
+
+ updateMusic();
+}
+
+
+/* =========================
+   PAUSE AND RESUME
+========================= */
+
+function pauseGame(){
+
+ if(gameState!=='playing')return;
+
+ gameState='paused';
+
+ updateMusic();
+
+ document.getElementById('pauseMenu').style.display='flex';
+}
+
+function resumeGame(){
+
+ if(gameState!=='paused')return;
+
+ gameState='playing';
+
+ document.getElementById('pauseMenu').style.display='none';
+
+ updateMusic();
+}
+
+
+/* =========================
+   GAME CLOCK
+========================= */
+
+const clock=new THREE.Clock();
+
+let lastFrameTime=0;
+let frameAccumulator=0;
+
+
+/* =========================
+   GAME UPDATE
+========================= */
+
+function updateGame(dt){
+
+ elapsed+=dt;
+
+ fireTimer=Math.max(0,fireTimer-dt);
+
+ if(keys.Space||shooting)shoot();
+
+ const speed=9;
+
+ let dx=0;
+ let dy=0;
+
+ if(keys.ArrowLeft||keys.KeyA)dx--;
+ if(keys.ArrowRight||keys.KeyD)dx++;
+ if(keys.ArrowUp||keys.KeyW)dy++;
+ if(keys.ArrowDown||keys.KeyS)dy--;
+
+ player.position.x=THREE.MathUtils.clamp(
+  player.position.x+dx*speed*dt,
+  -7,7
+ );
+
+ player.position.y=THREE.MathUtils.clamp(
+  player.position.y+dy*speed*dt,
+  -3.6,3.6
+ );
+
+ player.rotation.z=THREE.MathUtils.damp(
+  player.rotation.z,
+  -dx*.24,
+  6,
+  dt
+ );
+
+ player.rotation.x=THREE.MathUtils.damp(
+  player.rotation.x,
+  dy*.12,
+  5,
+  dt
+ );
+
+ wave=1+Math.floor(elapsed/35);
+
+ spawnTimer-=dt;
+
+ if(spawnTimer<=0){
+
+  spawnEnemy();
+
+  if(Math.random()<.28)spawnAsteroid();
+
+  spawnTimer=Math.max(1.5,3.5-wave*.12);
+
+  updateHUD();
+ }
+
+
+ /* PLAYER BULLETS */
+
+ for(let i=playerBullets.length-1;i>=0;i--){
+
+  const b=playerBullets[i];
+
+  b.mesh.position.z-=b.speed*dt;
+
+  if(b.mesh.position.z<-90){
+
+   scene.remove(b.mesh);
+   playerBullets.splice(i,1);
+
+   continue;
+  }
+
+  let hit=false;
+
+  for(let j=enemies.length-1;j>=0;j--){
+
+   const e=enemies[j];
+
+   if(collision(b.mesh.position,e.mesh.position,1.5)){
+
+    e.health--;
+
+    explosion(b.mesh.position.clone());
+
+    scene.remove(b.mesh);
+    playerBullets.splice(i,1);
+
+    hit=true;
+
+    if(e.health<=0)removeEnemy(j);
+
+    break;
+   }
+  }
+
+  if(hit)continue;
+ }
+
+
+ /* ENEMY MOVEMENT AND SHOOTING */
+
+ for(let i=enemies.length-1;i>=0;i--){
+
+  const e=enemies[i];
+  const m=e.mesh;
+
+  m.position.z+=e.speed*dt;
+  e.phase+=dt;
+
+  if(e.type===0){
+
+   m.position.x=e.baseX+Math.sin(e.phase*1.3)*1.8;
+   m.position.y=Math.sin(e.phase*1.8)*.8;
+
+  }else if(e.type===1){
+
+   m.position.x=e.baseX+Math.sin(e.phase*2.3)*3;
+   m.position.y=Math.cos(e.phase)*1.3;
+
+  }else if(e.type===2){
+
+   m.position.x+=(player.position.x-m.position.x)*dt*.45;
+   m.position.y+=(player.position.y-m.position.y)*dt*.35;
+
+  }else{
+
+   m.position.x=e.baseX+Math.sin(e.phase*.8)*2;
+   m.position.y=Math.cos(e.phase*1.3)*1.5;
+  }
+
+  m.rotation.z=Math.sin(e.phase)*.12;
+
+  e.fire-=dt;
+
+  if(e.fire<=0&&m.position.z<5){
+
+   createBullet(
+    m.position.x,
+    m.position.y,
+    m.position.z,
+    true
+   );
+
+   e.fire=2.6+Math.random()*1.5;
+  }
+
+  if(collision(player.position,m.position,1.5)){
+
+   explosion(m.position.clone());
+
+   scene.remove(m);
+   enemies.splice(i,1);
+
+   damage(20);
+
+   continue;
+  }
+
+  if(m.position.z>12){
+
+   scene.remove(m);
+   enemies.splice(i,1);
+  }
+ }
+
+
+ /* ENEMY BULLETS */
+
+ for(let i=enemyBullets.length-1;i>=0;i--){
+
+  const b=enemyBullets[i];
+
+  b.mesh.position.z+=b.speed*dt;
+
+  if(collision(player.position,b.mesh.position,1)){
+
+   explosion(b.mesh.position.clone());
+
+   scene.remove(b.mesh);
+   enemyBullets.splice(i,1);
+
+   damage(8);
+
+   continue;
+  }
+
+  if(b.mesh.position.z>12){
+
+   scene.remove(b.mesh);
+   enemyBullets.splice(i,1);
+  }
+ }
+
+
+ /* ASTEROIDS */
+
+ for(let i=obstacles.length-1;i>=0;i--){
+
+  const a=obstacles[i];
+  const m=a.mesh;
+
+  m.position.z+=a.speed*dt;
+
+  m.rotation.x+=a.spin*dt;
+  m.rotation.y+=a.spin*.7*dt;
+
+  if(collision(player.position,m.position,a.radius+.8)){
+
+   explosion(m.position.clone());
+
+   scene.remove(m);
+   obstacles.splice(i,1);
+
+   damage(18);
+
+   continue;
+  }
+
+  if(m.position.z>12){
+
+   scene.remove(m);
+   obstacles.splice(i,1);
+  }
+ }
+
+
+ /* MOVING STARFIELD */
+
+ for(const field of stars){
+
+  const p=field.geometry.attributes.position;
+
+  for(let i=2;i<p.array.length;i+=3){
+
+   p.array[i]+=dt*18;
+
+   if(p.array[i]>12){
+    p.array[i]=-230;
+   }
+  }
+
+  p.needsUpdate=true;
+ }
+}
+
+
+/* =========================
+   EFFECTS UPDATE
+========================= */
+
+function updateEffects(dt){
+
+ for(let i=effects.length-1;i>=0;i--){
+
+  const e=effects[i];
+
+  e.life-=dt;
+
+  for(const p of e.group.children){
+
+   if(p.userData.velocity){
+
+    p.position.addScaledVector(
+     p.userData.velocity,
+     dt
+    );
+
+    p.userData.velocity.multiplyScalar(.97);
+   }
+
+   p.scale.multiplyScalar(.985);
+
+   if(p.material&&p.material.transparent){
+
+    p.material.opacity=Math.max(
+     0,
+     p.material.opacity-dt*(
+      p.geometry?.type==='SphereGeometry'?.72:1.2
+     )
+    );
+   }
+  }
+
+  if(e.life<=0){
+
+   scene.remove(e.group);
+   effects.splice(i,1);
+  }
+ }
+}
+
+
+/* =========================
+   MAIN ANIMATION LOOP
+========================= */
+
+function animate(now=0){
+
+ requestAnimationFrame(animate);
+
+ /* زمان بین فریم‌ها جمع می‌شود تا محدودیت ۶۰ فریم
+    باعث کند شدن حرکت بازی نشود. */
+
+ const rawDt=clock.getDelta();
+
+ frameAccumulator+=rawDt;
+
+ if(now-lastFrameTime<1000/60)return;
+
+ lastFrameTime=now;
+
+ const dt=Math.min(frameAccumulator,.05);
+
+ frameAccumulator=0;
+
+
+ if(gameState==='playing'){
+
+  updateGame(dt);
+
+ }else if(gameState==='crashing'){
+
+  crashTimer+=dt;
+
+  /* سقوط جنگنده آسیب‌دیده */
+
+  player.rotation.z-=dt*2.9;
+  player.rotation.x+=dt*1.35;
+  player.rotation.y+=dt*.75;
+
+  player.position.y-=dt*(2.8+crashTimer*1.8);
+
+  player.position.x+=dt*(
+   .55+Math.sin(crashTimer*5)*.45
+  );
+
+  player.position.z-=dt*2.4;
+
+
+  /* آتش و انفجار */
+
+  if(crashTimer>.12&&Math.random()<.55){
+   explosion(player.position.clone());
+  }
+
+  crashTrailTimer+=dt;
+
+  if(crashTrailTimer>=.075){
+
+   createCrashTrail();
+   crashTrailTimer=0;
+  }
+
+  if(crashTimer>2.8){
+
+   player.visible=false;
+   finishCrash();
+  }
+ }
+
+
+ updateEffects(dt);
+
+ blueLight.intensity=40+Math.sin(performance.now()*.001)*5;
+
+ planets.forEach(p=>{
+  p.group.rotation.y+=dt*.015;
+ });
+
+ renderer.render(scene,camera);
+}
+
+
+/* =========================
+   SETTINGS
+========================= */
+
+document.getElementById('settingsBtn').onclick=()=>{
+
+ const s=document.getElementById('settings');
+
+ s.style.display=s.style.display==='none'?'block':'none';
+};
+
+document.getElementById('musicVolume').oninput=updateMusic;
+
+document.getElementById('musicToggle').onclick=()=>{
+
+ musicEnabled=!musicEnabled;
+
+ document.getElementById('musicToggle').textContent=
+  'MUSIC: '+(musicEnabled?'ON':'OFF');
+
+ updateMusic();
+};
+
+document.getElementById('brightness').oninput=e=>{
+
+ renderer.toneMappingExposure=Number(e.target.value);
+};
+
+
+/* =========================
+   MAIN BUTTONS
+========================= */
+
+document.getElementById('startBtn').onclick=startGame;
+document.getElementById('pauseBtn').onclick=pauseGame;
+document.getElementById('resumeBtn').onclick=resumeGame;
+document.getElementById('restartBtn').onclick=startGame;
+document.getElementById('restartPause').onclick=startGame;
+
+document.getElementById('menuPause').onclick=()=>{
+
+ gameState='menu';
+
+ updateMusic();
+
+ document.getElementById('pauseMenu').style.display='none';
+ document.getElementById('menu').style.display='flex';
+ document.getElementById('controls').style.display='none';
+};
+
+document.getElementById('homeBtn').onclick=()=>{
+
+ gameState='menu';
+
+ updateMusic();
+
+ document.getElementById('gameOver').style.display='none';
+ document.getElementById('menu').style.display='flex';
+ document.getElementById('controls').style.display='none';
+};
+
+
+/* =========================
+   RESIZE
+========================= */
+
+window.addEventListener('resize',()=>{
+
+ camera.aspect=window.innerWidth/window.innerHeight;
+
+ camera.updateProjectionMatrix();
+
+ renderer.setSize(window.innerWidth,window.innerHeight);
+
+ renderer.setPixelRatio(
+  Math.min(window.devicePixelRatio,1.35)
+ );
+});
+
+
+/* =========================
+   START
+========================= */
+
+animate();
+
+</script>
+</body>
+</html>

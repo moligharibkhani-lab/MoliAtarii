@@ -1,0 +1,387 @@
+
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MoliAtari 3D</title>
+<style>
+* { margin: 0; padding: 0; }
+body {
+  overflow: hidden;
+  background: #02040d;
+  font-family: Arial, sans-serif;
+}
+canvas { display: block; }
+#hud {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  color: #42eaff;
+  font-size: 18px;
+  text-shadow: 0 0 12px #00cfff;
+  pointer-events: none;
+}
+</style>
+</head>
+<body>
+<div id="hud">MOLIATARI 3D<br>SPACE FLIGHT</div>
+
+<script type="module">
+import * as THREE from '../node_modules/three/build/three.module.js';
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x02040d);
+scene.fog = new THREE.FogExp2(0x02040d, 0.009);
+
+const camera = new THREE.PerspectiveCamera(
+  65, window.innerWidth / window.innerHeight, 0.1, 1000
+);
+camera.position.set(0, 4, 11);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+document.body.appendChild(renderer.domElement);
+
+// نورپردازی
+scene.add(new THREE.AmbientLight(0x8099cc, 1.5));
+
+const light = new THREE.PointLight(0x35dfff, 100, 80);
+light.position.set(0, 8, 5);
+scene.add(light);
+
+
+// ==========================================
+// MOLIATARI - PHANTOM X MK.III
+// Compact / Metallic / Futuristic Fighter
+// ==========================================
+
+const ship = new THREE.Group();
+scene.add(ship);
+
+const titanium = new THREE.MeshStandardMaterial({
+  color: 0xcbd8e4,
+  metalness: 0.92,
+  roughness: 0.23
+});
+
+const whiteArmor = new THREE.MeshStandardMaterial({
+  color: 0xf0f5fa,
+  metalness: 0.82,
+  roughness: 0.2
+});
+
+const darkMetal = new THREE.MeshStandardMaterial({
+  color: 0x202d3b,
+  metalness: 0.88,
+  roughness: 0.3
+});
+
+const blackGlass = new THREE.MeshPhysicalMaterial({
+  color: 0x061c35,
+  metalness: 0.55,
+  roughness: 0.08,
+  clearcoat: 1,
+  clearcoatRoughness: 0.04
+});
+
+const neonBlue = new THREE.MeshBasicMaterial({
+  color: 0x16bfff
+});
+
+const blueGlow = new THREE.PointLight(0x168cff, 2.4, 5);
+
+// Main fuselage
+function fuselagePart(x, y, z, sx, sy, sz, material, bevel = 0) {
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(sx, sy, sz),
+    material
+  );
+  mesh.position.set(x, y, z);
+  ship.add(mesh);
+  return mesh;
+}
+
+// Main body: tapered custom sections
+const bodyShape = new THREE.Shape();
+bodyShape.moveTo(-0.18, -0.55);
+bodyShape.lineTo(-0.28, 0.25);
+bodyShape.lineTo(-0.12, 1.25);
+bodyShape.lineTo(0, 1.65);
+bodyShape.lineTo(0.12, 1.25);
+bodyShape.lineTo(0.28, 0.25);
+bodyShape.lineTo(0.18, -0.55);
+bodyShape.closePath();
+
+const bodyGeo = new THREE.ExtrudeGeometry(bodyShape, {
+  depth: 0.5,
+  bevelEnabled: true,
+  bevelSegments: 2,
+  steps: 1,
+  bevelSize: 0.06,
+  bevelThickness: 0.06
+});
+bodyGeo.rotateX(Math.PI / 2);
+
+const body = new THREE.Mesh(bodyGeo, titanium);
+body.position.set(0, 0, 0.25);
+ship.add(body);
+
+// Sharp nose
+const nose = new THREE.Mesh(
+  new THREE.ConeGeometry(0.22, 1.55, 8),
+  whiteArmor
+);
+nose.rotation.x = -Math.PI / 2;
+nose.position.set(0, 0.02, -1.25);
+ship.add(nose);
+
+// Central armor spine
+const spine = new THREE.Mesh(
+  new THREE.BoxGeometry(0.22, 0.12, 2.35),
+  whiteArmor
+);
+spine.position.set(0, 0.17, -0.05);
+ship.add(spine);
+
+// Cockpit
+const cockpit = new THREE.Mesh(
+  new THREE.SphereGeometry(0.31, 24, 16),
+  blackGlass
+);
+cockpit.scale.set(0.78, 0.48, 1.9);
+cockpit.position.set(0, 0.29, -0.48);
+ship.add(cockpit);
+
+// Cockpit frame
+const cockpitFrame = new THREE.Mesh(
+  new THREE.BoxGeometry(0.07, 0.06, 1.05),
+  darkMetal
+);
+cockpitFrame.position.set(0, 0.43, -0.48);
+ship.add(cockpitFrame);
+
+// Angular wings
+function createWing(side) {
+  const shape = new THREE.Shape();
+  shape.moveTo(0.12, 0.35);
+  shape.lineTo(1.85, -0.55);
+  shape.lineTo(1.45, -1.1);
+  shape.lineTo(0.35, -0.62);
+  shape.lineTo(0.12, -0.2);
+  shape.closePath();
+
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth: 0.12,
+    bevelEnabled: true,
+    bevelSegments: 2,
+    bevelSize: 0.035,
+    bevelThickness: 0.035
+  });
+
+  geo.rotateX(Math.PI / 2);
+
+  const wing = new THREE.Mesh(geo, whiteArmor);
+  wing.scale.x = side;
+  wing.position.set(0, -0.02, 0.1);
+  ship.add(wing);
+
+  // Dark wing armor
+  const armor = new THREE.Mesh(
+    new THREE.BoxGeometry(0.95, 0.055, 0.18),
+    darkMetal
+  );
+  armor.position.set(side * 0.95, 0.01, 0.35);
+  armor.rotation.y = side * -0.3;
+  ship.add(armor);
+
+  // Blue wing strip
+  const strip = new THREE.Mesh(
+    new THREE.BoxGeometry(0.95, 0.025, 0.035),
+    neonBlue
+  );
+  strip.position.set(side * 1.02, 0.055, 0.29);
+  strip.rotation.y = side * -0.3;
+  ship.add(strip);
+
+  // Wingtip light
+  const tip = new THREE.Mesh(
+    new THREE.SphereGeometry(0.065, 12, 8),
+    neonBlue
+  );
+  tip.position.set(side * 1.72, 0.04, -0.48);
+  ship.add(tip);
+}
+
+createWing(1);
+createWing(-1);
+
+// Twin engines
+for (const side of [-1, 1]) {
+  const engine = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.17, 0.2, 0.65, 16),
+    darkMetal
+  );
+  engine.rotation.x = Math.PI / 2;
+  engine.position.set(side * 0.2, -0.1, 0.95);
+  ship.add(engine);
+
+  const rim = new THREE.Mesh(
+    new THREE.TorusGeometry(0.17, 0.035, 8, 24),
+    titanium
+  );
+  rim.position.set(side * 0.2, -0.1, 1.28);
+  ship.add(rim);
+
+  const core = new THREE.Mesh(
+    new THREE.CircleGeometry(0.125, 24),
+    neonBlue
+  );
+  core.position.set(side * 0.2, -0.1, 1.3);
+  ship.add(core);
+
+  const flame = new THREE.Mesh(
+    new THREE.ConeGeometry(0.12, 0.65, 16),
+    new THREE.MeshBasicMaterial({
+      color: 0x168dff,
+      transparent: true,
+      opacity: 0.78
+    })
+  );
+  flame.rotation.x = -Math.PI / 2;
+  flame.position.set(side * 0.2, -0.1, 1.72);
+  ship.add(flame);
+}
+
+// Rear vertical stabilizers
+for (const side of [-1, 1]) {
+  const fin = new THREE.Mesh(
+    new THREE.BoxGeometry(0.09, 0.55, 0.75),
+    titanium
+  );
+  fin.position.set(side * 0.32, 0.28, 0.72);
+  fin.rotation.z = side * -0.28;
+  ship.add(fin);
+}
+
+// Mechanical panel lines
+for (const side of [-1, 1]) {
+  for (let i = 0; i < 3; i++) {
+    const line = new THREE.Mesh(
+      new THREE.BoxGeometry(0.025, 0.018, 0.48),
+      darkMetal
+    );
+    line.position.set(side * (0.43 + i * 0.25), 0.065, 0.05);
+    line.rotation.y = side * 0.22;
+    ship.add(line);
+  }
+}
+
+// Small armor plates
+for (const side of [-1, 1]) {
+  const plate = new THREE.Mesh(
+    new THREE.BoxGeometry(0.16, 0.07, 0.38),
+    darkMetal
+  );
+  plate.position.set(side * 0.3, 0.12, 0.68);
+  ship.add(plate);
+}
+
+// Engine glow
+blueGlow.position.set(0, 0, 1.5);
+ship.add(blueGlow);
+
+// Scale and position
+ship.scale.setScalar(0.8);
+ship.position.set(0, 0, 0);
+
+
+
+// ستاره‌ها
+const starGeometry = new THREE.BufferGeometry();
+const starPositions = [];
+
+for (let i = 0; i < 1800; i++) {
+  starPositions.push(
+    (Math.random() - 0.5) * 180,
+    (Math.random() - 0.5) * 100,
+    -Math.random() * 180
+  );
+}
+
+starGeometry.setAttribute(
+  'position',
+  new THREE.Float32BufferAttribute(starPositions, 3)
+);
+
+const stars = new THREE.Points(
+  starGeometry,
+  new THREE.PointsMaterial({
+    color: 0x9eeaff,
+    size: 0.16
+  })
+);
+scene.add(stars);
+
+// سیاره‌ها
+const planet = new THREE.Mesh(
+  new THREE.SphereGeometry(9, 48, 48),
+  new THREE.MeshStandardMaterial({
+    color: 0x172b70,
+    roughness: 0.9
+  })
+);
+planet.position.set(-22, 12, -55);
+scene.add(planet);
+
+const planet2 = new THREE.Mesh(
+  new THREE.SphereGeometry(4, 32, 32),
+  new THREE.MeshStandardMaterial({
+    color: 0x713b85,
+    roughness: 0.8
+  })
+);
+planet2.position.set(24, -8, -75);
+scene.add(planet2);
+
+// حرکت جنگنده با کیبورد
+const keys = {};
+window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  if (keys['arrowleft'] || keys['a']) ship.position.x -= 0.12;
+  if (keys['arrowright'] || keys['d']) ship.position.x += 0.12;
+  if (keys['arrowup'] || keys['w']) ship.position.y += 0.1;
+  if (keys['arrowdown'] || keys['s']) ship.position.y -= 0.1;
+
+  ship.position.x = THREE.MathUtils.clamp(ship.position.x, -5, 5);
+  ship.position.y = THREE.MathUtils.clamp(ship.position.y, -3, 3);
+
+  ship.rotation.z = -ship.position.x * 0.07;
+  stars.position.z += 0.12;
+
+  if (stars.position.z > 20) stars.position.z = 0;
+
+  planet.rotation.y += 0.001;
+  planet2.rotation.y += 0.002;
+
+  camera.position.x += (ship.position.x * 0.25 - camera.position.x) * 0.03;
+
+  renderer.render(scene, camera);
+}
+
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
